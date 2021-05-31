@@ -57,20 +57,22 @@ uint16_t ADCin = 0;
 uint64_t _micro = 0;
 uint16_t dataOut = 0;
 uint8_t DACConfig = 0b0011;
-int Wave[3] = {0};
+uint64_t Timestat = 0;
+int Wave = 0;
+int Sin_value=0;
 char TxDataBuffer[122] =
 { 0 };
 char RxDataBuffer[32] =
 { 0 };
-char Status[15]=
+char Status[17]=
 {0};
+uint8_t Kwarmchan = 0;
+
 int Duty = 50;
-float VH =3.3;
-float VL =0.0;
-float Frequency = 1;
-int Pcount = 0;
-int status=0;
-int Time_blink=1;
+int Freq = 10;
+float Pcount = 0;
+int V_max =33;
+int V_min =0;
 uint8_t state =0;
 uint8_t ucount=0;
 uint8_t pcount=0;
@@ -155,150 +157,391 @@ int main(void)
 	{
 		HAL_UART_Receive_IT(&huart2,  (uint8_t*)RxDataBuffer, 32);
 				/*Method 2 W/ 1 Char Received*/
-				int16_t inputchar = UARTRecieveIT();
+		int16_t inputchar = UARTRecieveIT();
 		static uint64_t timestamp = 0;
 		switch (state)
-				  {
-		   case Menu_First_Present:
-		      sprintf(TxDataBuffer,"Function-GEN\r\npress_a_to_SAWTOOTH\r\npress_s_to_SIN\r\npress_s_to_SQUARE\r\n---------------------------------------------\r\n");
-		      HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer),10);
-		      state = Menu_First;
-		      break;
-		   case Menu_First:
-		   switch (inputchar)
-		   {
-		   case 'a':
-		     state = Menu_SAWTOOTH_Present;
-		     break;
-		   case 's':
-		     state = Menu_SIN_Present;
-		     break;
-		   case 'd':
-		     state = Menu_SQUARE_Present;
-		   	 break;
-		   case -1:
-		     break;
-		   default:
-			   HAL_UART_Transmit(&huart2, (uint8_t*)error, strlen(error),10);
-			   	state = Menu_First_Present;
-		     break;
-		   }
-		   break;
-		    case Menu_SAWTOOTH_Present:
-		     sprintf(TxDataBuffer,"SAWTOOTH-Gen\r\nFrequency(q+/w-)\r\nV-high(r+/t-)\r\nV-low(y+/u-)\r\nSlope Up/Down(c)\r\ne-Exit\r\n--------------------------------\r\n");
-		     HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer),10);
-		     state = Menu_SAWTOOTH;
-		     break;
-		   case Menu_SAWTOOTH:
-		   switch (inputchar)
-		   {
+			{
+			   case Menu_First_Present:
+				  sprintf(TxDataBuffer,"Function-GEN\r\npress_a_to_SAWTOOTH\r\npress_s_to_SIN\r\npress_d_to_SQUARE\r\n------------\r\n");
+				  HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer),10);
+				  state = Menu_First;
+				  break;
 
-		   case 'q':
-			   Time_blink+=1;
-			   sprintf(Status,"Frequency=[%d]\r\n",Time_blink);
-			   HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
-			   break;
-		   case 'w':
-			   Time_blink-=1;
-			   if(Time_blink<=0){
-			   	Time_blink=0;
-			   }else{
+			   case Menu_First:
+				   Wave=0;
+					   switch (inputchar)
+					   {
+					   case 'a':
+						   Wave =1;
+						 state = Menu_SAWTOOTH_Present;
+						 break;
+					   case 's':
+						   Wave =2;
+						 state = Menu_SIN_Present;
+						 break;
+					   case 'd':
+						   Wave =3;
+						 state = Menu_SQUARE_Present;
+						 break;
+					   case -1:
+						 break;
+					   default:
+						  // HAL_UART_Transmit(&huart2, (uint8_t*)error, strlen(error),10);
+							state = Menu_First_Present;
+						 break;
+					   }
+					   	break;
+			  case Menu_SAWTOOTH_Present:
+						 sprintf(TxDataBuffer,"SAWTOOTH-Gen\r\nFrequency(q+/w-)\r\nV-high(r+/t-)\r\nV-low(y+/u-)\r\nSlope Up/Down(c)\r\ne-Exit\r\n------------\r\n");
+						 HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer),10);
+						 state = Menu_SAWTOOTH;
+						 break;
+			 case Menu_SAWTOOTH:
+				   switch (inputchar)
+				   {
+					   case 'q':
+						   if(Freq<100)
+						   {
+							   Freq+=1;
+						   }
+						   if(Freq<10)
+						   {
+							sprintf(Status,"Frequency=[0.%d]\r\n",Freq);
+						   }
+						   else if (Freq>=10)
+						   {
+							sprintf(Status,"Frequency=[%d.%d]\r\n",Freq/10,Freq%10);
+						   }
+						   HAL_UART_Transmit(&huart2, (uint8_t*)Status, strlen(Status),10);
+						   break;
 
-			   }
-			   sprintf(Status,"Frequency=[%d]\r\n",Time_blink);
-			   HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
-		       break;
-		   case 'r':
-			   if(status==0){
-				   status=1;
-				   sprintf(Status,"LED_ON\r\n",Time_blink);
-				   HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
-			   }else{
-				   status=0;
-				   sprintf(Status,"LED_OFF\r\n",Time_blink);
-				   HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
-			   }
-			   break;
-		   case 't':
-		   		   Time_blink+=1;
-		   		   sprintf(Status,"Frequency=[%d]\r\n",Time_blink);
-		   		   HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
-		   	   break;
-		   case 'c':
-		   		   Time_blink+=1;
-		   		   sprintf(Status,"Frequency=[%d]\r\n",Time_blink);
-		   		   HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
-		   	   break;
-		   case 'e':
-		     state = Menu_First_Present;
-		     break;
-		   case -1:
-			 break;
-		   default:
-			   HAL_UART_Transmit(&huart2, (uint8_t*)error, strlen(error),10);
-			   state = Menu_SAWTOOTH_Present;
-		     break;
-		   }
-		   break;
+					   case 'w':
+
+							if(Freq>0)
+							{
+								Freq-=1;
+							}
+							if(Freq<10)
+							{
+							sprintf(Status,"Frequency=[0.%d]\r\n",Freq);
+							}
+							else if (Freq>=10)
+							{
+							sprintf(Status,"Frequency=[%d.%d]\r\n",Freq/10,Freq%10);
+							}
+							HAL_UART_Transmit(&huart2, (uint8_t*)Status, strlen(Status),10);
+							break;
+
+					   case 'r':
+						   if(V_max<33)
+						   {
+							   V_max+=1;
+						   }
+							if(V_max<10){
+							   sprintf(Status,"V-HIGH=[0.%d]\r\n",V_max);
+						   }else if(V_max>=10)
+						   {
+							   sprintf(Status,"V-HIGH=[%d.%d]\r\n",V_max/10,V_max%10);
+						   }
+							HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
+						   break;
+					   case 't':
+						 if(V_max>V_min){
+							 V_max-=1;
+					    }
+						 if(V_max<10){
+							  sprintf(Status,"V-HIGH=[0.%d]\r\n",V_max);
+						}else if(V_max>=10)
+						{
+							  sprintf(Status,"V-HIGH=[%d.%d]\r\n",V_max/10,V_max%10);
+				        }
+						      HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
+						     break;
+					   case 'y':
+							if(V_min<V_max){
+							  V_min+=1;
+						   }
+							if(V_min<10){
+							   sprintf(Status,"V-LOW=[0.%d]\r\n",V_min);
+							}else if(V_min>=10)
+							{
+							   sprintf(Status,"V-LOW=[%d.%d]\r\n",V_min/10,V_min%10);
+							}
+							 HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
+							 break;
+					   case 'u':
+							 if(V_min>0){
+							   V_min-=1;
+							 }
+							 if(V_min<10){
+								sprintf(Status,"V-LOW=[0.%d]\r\n",V_min);
+							}else if(V_min>=10)
+							{
+								sprintf(Status,"V-LOW=[%d]\r\n",V_min/10,V_min%10);
+							}
+							 HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
+							break;
+					   case 'c':
+						   if(Kwarmchan == 0){
+							   Kwarmchan=1;
+							  sprintf(Status,"SLOPE-UP\r\n");
+							  HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
+						  }else if(Kwarmchan == 1){
+							  Kwarmchan=0;
+							  sprintf(Status,"SLOPE-DOWN\r\n");
+						  }
+							  HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
+						   break;
+					   case 'e':
+						 state = Menu_First_Present;
+						 break;
+					   case -1:
+						 break;
+					   default:
+						   HAL_UART_Transmit(&huart2, (uint8_t*)error, strlen(error),10);
+						   state = Menu_SAWTOOTH_Present;
+						 break;
+				   }
+				   break;
 
 		   case Menu_SIN_Present:
-		     sprintf(TxDataBuffer,"Button_Status\r\ne-exit\r\n--------------------------------\r\n");
-		     HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer),10);
-		     state = Menu_SIN;
-		     break;
+						 sprintf(TxDataBuffer,"SIN_WAVE-Gen\r\nFrequency(q+/w-)\r\nV-high(r+/t-)\r\nV-low(y+/u-)\r\ne-Exit\r\n------------\r\n");
+						 HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer),10);
+						 state = Menu_SIN;
+						 break;
 		   case Menu_SIN:
-		   switch (inputchar)
-		   {
-		   case 'e':
-       state = Menu_First_Present;
-		     break;
-		   case -1:
-			   if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)==GPIO_PIN_RESET && pcount==0){
-			  	  sprintf(Status,"button_press\r\n");
-			  	  HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
-			     	ucount=0;
-			     	pcount=1;
-			     }else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)==GPIO_PIN_SET && ucount==0){
-			     sprintf(Status,"unpress\r\n");
-			     HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
-			        ucount=1;
-			    	pcount=0;
-			     }else{
-			     }
-		  	 break;
-		   default:
-			   HAL_UART_Transmit(&huart2, (uint8_t*)error, strlen(error),10);
-			   state = Menu_SIN_Present;
-		     break;
-		   }
-		   break;
-		   }
+				   switch (inputchar)
+				   {
+					case 'q':
+						   if(Freq<100){
+							  Freq+=1;
+						   }
+						   if(Freq<10){
+							sprintf(Status,"Frequency=[0.%d]\r\n",Freq);
+						   }else if(Freq>=10)
+						   {
+							sprintf(Status,"Frequency=[%d.%d]\r\n",Freq/10,Freq%10);
+						   }
+						   HAL_UART_Transmit(&huart2, (uint8_t*)Status, strlen(Status),10);
+						   break;
+				   case 'w':
+							if(Freq>0){
+								 Freq-=1;
+							}
+							if(Freq<10){
+							   sprintf(Status,"Frequency=[0.%d]\r\n",Freq);
+							}else if(Freq>=10)
+							{
+							   sprintf(Status,"Frequency=[%d.%d]\r\n",Freq/10,Freq%10);
+							}
+							 HAL_UART_Transmit(&huart2, (uint8_t*)Status, strlen(Status),10);
+							break;
+				   case 'r':
+						   if(V_max<33){
+							   V_max+=1;
+						   }
+							if(V_max<10){
+							   sprintf(Status,"V-HIGH=[0.%d]\r\n",V_max);
+						   }else if(V_max>=10)
+						   {
+							   sprintf(Status,"V-HIGH=[%d.%d]\r\n",V_max/10,V_max%10);
+						   }
+							HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
+						   break;
+				   case 't':
+							 if(V_max>V_min){
+								V_max-=1;
+							  }
+							 if(V_max<10){
+								  sprintf(Status,"V-HIGH=[0.%d]\r\n",V_max);
+							}else if(V_max>=10)
+							{
+								  sprintf(Status,"V-HIGH=[%d.%d]\r\n",V_max/10,V_max%10);
+							}
+							   HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
+							   break;
+				   case 'y':
+							if(V_min<V_max){
+							   V_min+=1;
+						   }
+							if(V_min<10){
+							   sprintf(Status,"V-LOW=[0.%d]\r\n",V_min);
+							}else if(V_min>=10)
+							{
+							   sprintf(Status,"V-LOW=[%d.%d]\r\n",V_min/10,V_min%10);
+							}
+							 HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
+							 break;
+				   case 'u':
+							 if(V_min>=0){
+								V_min-=1;
+							}
+							 if(V_min<10){
+								sprintf(Status,"V-LOW=[0.%d]\r\n",V_min);
+							}else if(V_min>=10)
+							{
+								sprintf(Status,"V-LOW=[%d.%d]\r\n",V_min/10,V_min%10);
+							}
+							 HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
+							break;
+				   case 'e':
+							 state = Menu_First_Present;
+							break;
+				   case -1:
+							break;
+				   default:
+						   HAL_UART_Transmit(&huart2, (uint8_t*)error, strlen(error),10);
+						   state = Menu_SIN_Present;
+						   break;
+				   }
+				   break;
+		   case Menu_SQUARE_Present:
+		   		sprintf(TxDataBuffer,"SQUARE-Gen\r\nFreq(q+/w-)\r\nV-high(r+/t-)\r\nV-low(y+/u-)\r\nDUTY(i+/o-)\r\ne-Exit\r\n------------\r\n");
+		   		HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer),10);
+		   		state = Menu_SQUARE;
+		   		break;
+		   case Menu_SQUARE:
+				switch (inputchar)
+					{
+					 case 'q':
+							 if(Freq<100){
+								Freq += 1;
+							}else{
+							}
+							 if(Freq<10)
+							{
+								sprintf(Status,"Frequency=[0.%d]\r\n",Freq);
+							}else if(Freq>=10)\
+							{
+							 sprintf(Status,"Frequency=[%d.%d]\r\n",Freq/10,Freq%10);
+							}
+							 HAL_UART_Transmit(&huart2, (uint8_t*)Status, strlen(Status),10);
+							 break;
+					 case 'w':
+							 if(Freq>0){
+								 Freq-=1;
+							}
+							  if(Freq<10)
+							 {
+								 sprintf(Status,"Frequency=[0.%d]\r\n",Freq);
+							 }else if(Freq>=10)
+							 {
+								 sprintf(Status,"Frequency=[%d.%d]\r\n",Freq/10,Freq%10);
+							 }
+							  HAL_UART_Transmit(&huart2, (uint8_t*)Status, strlen(Status),10);
+							 break;
+					case 'r':
+							  if(V_max<33){
+								 V_max+=1;
+							 }
+							  if(V_max<10){
+								 sprintf(Status,"V-HIGH=[0.%d]\r\n",V_max);
+							 }else if(V_max>=10)
+							 {
+								 sprintf(Status,"V-HIGH=[%d.%d]\r\n",V_max/10,V_max%10);
+							 }
+							  HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
+							 break;
+					case 't':
+							 if(V_max>V_min){
+								 V_max-=1;
+							}
+							 if(V_max<10){
+								sprintf(Status,"V-HIGH=[0.%d]\r\n",V_max);
+							}else{
+								sprintf(Status,"V-HIGH=[%d.%d]\r\n",V_max/10,V_max%10);
+							}
+							 HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
+							 break;
+					case 'y':
+							 if(V_min<V_max){
+								V_min+=1;
+							}
+							 if(V_min<10){
+								sprintf(Status,"V-LOW=[0.%d]\r\n",V_min);
+							}else if(V_min>=10){
+								sprintf(Status,"V-LOW=[%d.%d]\r\n",V_min/10,V_min%10);
+							}
+								HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
+							 break;
+					case 'u':
+							 if(V_min>0){
+								V_min-=1;
+							}
+							  if(V_min<10){
+								 sprintf(Status,"V-LOW=[0.%d]\r\n",V_min);
+							 }else if(V_min>=10){
+								 sprintf(Status,"V-LOW=[%d.%d]\r\n",V_min/10,V_min%10);
+							 }
+								 HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
+								break;
+					case 'e':
+							state = Menu_First_Present;
+							break;
+					case 'i':
+							if(Duty<100){
+							   Duty+=1;
+						   }
+							sprintf(Status,"DUTY=[%d]\r\n",Duty);
+							HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
+							break;
+					 case 'o':
+							if(Duty>0){
+								Duty-=1;
+						   }
+							sprintf(Status,"DUTY=[%d]\r\n",Duty);
+							HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
+							break;
+					case -1:
+							break;
+					default:
+							HAL_UART_Transmit(&huart2, (uint8_t*)error, strlen(error),10);
+							state = Menu_SQUARE_Present;
+						   break;
+					   }
+			   break;
+			   }
 		if (micros() - timestamp > 100)
 		{
 			timestamp = micros();
 			Pcount +=0.0001;
-			if(Pcount>=(1/Frequency)){
+			if(Freq!=0){
+			if(Pcount>=(10/Freq)){
 								Pcount = 0;
 							}else{
 
 							}
-			if(Wave[0]==1){
-				dataOut =0.000001*timestamp*4096*Frequency;//genslope
+			}
+			if(Wave==1){
+				dataOut =0.0000001*timestamp*4096*Freq;//genslope
+				if(Kwarmchan==1){
 				dataOut %= 4096;//slope-cut
-				dataOut = dataOut*(VH-VL)/3.3; //amplify
-				dataOut = dataOut+VL; //offset
-			}else if(Wave[1]==1){
-				dataOut = sin(2*3.14*Frequency*0.000001*timestamp);
-				dataOut = dataOut*(VH-VL)/3.3; //amplify
-				dataOut = dataOut+(VH-VL); //offset
-			}else{
-				if(Pcount<=Duty){
-					dataOut = 4096*VH/3.3;
+				}else if(Kwarmchan==0)
+				{
+					dataOut %= 4096;
+					dataOut =4096-dataOut;
+					//dataOut--;
+				if(dataOut<=0){
+					dataOut = 4096 ;//resetslope
+				}
+				}
+				dataOut = dataOut*(V_max-V_min)/33; //amplify
+				dataOut = dataOut+(V_min*4096)/33; //offset
+			}else if(Wave==2){
+				Sin_value = 2048*sin(2*3.14*Freq*0.0000001*timestamp);//sin(2*pi*f*t)
+				Sin_value = Sin_value*(V_max-V_min)/33; //amplify
+				dataOut = Sin_value+(409.6*(V_max+V_min)/6.6); //offset
+			}else if(Wave==3 && Freq!=0){
+				if(Pcount<=(Duty/(10*Freq))){
+					dataOut = 4096*V_max/33;
 				}else{
-					dataOut = 4096*VL/3.3;
+					dataOut = 4096*V_min/33;
 				}
 
+			}else{
+				dataOut = 4095;
 			}
+
 			if (hspi3.State == HAL_SPI_STATE_READY
 					&& HAL_GPIO_ReadPin(SPI_SS_GPIO_Port, SPI_SS_Pin)
 							== GPIO_PIN_SET)
