@@ -69,7 +69,9 @@ char Status[17]=
 uint8_t Kwarmchan = 0;
 
 int Duty = 50;
+float duty_cycle;
 int Freq = 10;
+float Period_cut=0;
 float Pcount = 0;
 int V_max =33;
 int V_min =0;
@@ -508,8 +510,6 @@ int main(void)
 			if(Freq!=0){
 			if(Pcount>=(10/Freq)){
 								Pcount = 0;
-							}else{
-
 							}
 			}
 			if(Wave==1){
@@ -532,12 +532,14 @@ int main(void)
 				Sin_value = Sin_value*(V_max-V_min)/33; //amplify
 				dataOut = Sin_value+(409.6*(V_max+V_min)/6.6); //offset
 			}else if(Wave==3 && Freq!=0){
-				if(Pcount<=(Duty/(10*Freq))){
-					dataOut = 4096*V_max/33;
-				}else{
-					dataOut = 4096*V_min/33;
+				duty_cycle=Duty;
+				Period_cut = duty_cycle/(10*Freq);
+				if(Pcount<=Period_cut){
+					dataOut = 4095*V_max/33;
 				}
-
+				else if(Pcount>Period_cut){
+					dataOut = 0;
+				}
 			}else{
 				dataOut = 4095;
 			}
