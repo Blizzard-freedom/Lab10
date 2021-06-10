@@ -56,6 +56,7 @@ UART_HandleTypeDef huart2;
 uint16_t ADCin = 0;
 uint64_t _micro = 0;
 uint16_t dataOut = 0;
+uint16_t Sawtooth = 0;
 uint8_t DACConfig = 0b0011;
 uint64_t Timestat = 0;
 int Wave = 0;
@@ -279,7 +280,7 @@ int main(void)
 								sprintf(Status,"V-LOW=[0.%d]\r\n",V_min);
 							}else if(V_min>=10)
 							{
-								sprintf(Status,"V-LOW=[%d]\r\n",V_min/10,V_min%10);
+								sprintf(Status,"V-LOW=[%d.%d]\r\n",V_min/10,V_min%10);
 							}
 							 HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
 							break;
@@ -375,7 +376,7 @@ int main(void)
 							 HAL_UART_Transmit_IT(&huart2, (uint8_t*)Status, strlen(Status));
 							 break;
 				   case 'u':
-							 if(V_min>=0){
+							 if(V_min>0){
 								V_min-=1;
 							}
 							 if(V_min<10){
@@ -508,25 +509,26 @@ int main(void)
 			timestamp = micros();
 			Pcount +=0.0001;
 			if(Freq!=0){
-			if(Pcount>=(10/Freq)){
+				float freq = Freq;
+			if(Pcount>=(10/freq)){
 								Pcount = 0;
 							}
 			}
 			if(Wave==1){
-				dataOut =0.0000001*timestamp*4096*Freq;//genslope
+				Sawtooth =0.0000001*timestamp*4095*Freq;//genslope
 				if(Kwarmchan==1){
-				dataOut %= 4096;//slope-cut
+				Sawtooth = Sawtooth%4095;//slope-cut
 				}else if(Kwarmchan==0)
 				{
-					dataOut %= 4096;
-					dataOut =4096-dataOut;
+					Sawtooth %= 4095;
+					Sawtooth =4095-Sawtooth;
 					//dataOut--;
-				if(dataOut<=0){
-					dataOut = 4096 ;//resetslope
+				if(Sawtooth<=0){
+					Sawtooth = 4095 ;//resetslope
 				}
 				}
-				dataOut = dataOut*(V_max-V_min)/33; //amplify
-				dataOut = dataOut+(V_min*4096)/33; //offset
+				Sawtooth = Sawtooth*(V_max-V_min)/33; //amplify
+				dataOut = Sawtooth+(V_min*4095)/33; //offset
 			}else if(Wave==2){
 				Sin_value = 2048*sin(2*3.14*Freq*0.0000001*timestamp);//sin(2*pi*f*t)
 				Sin_value = Sin_value*(V_max-V_min)/33; //amplify
@@ -538,7 +540,7 @@ int main(void)
 					dataOut = 4095*V_max/33;
 				}
 				else if(Pcount>Period_cut){
-					dataOut = 0;
+					dataOut = 4095*V_min/33;
 				}
 			}else{
 				dataOut = 4095;
